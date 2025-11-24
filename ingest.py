@@ -1,14 +1,15 @@
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 import os
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+# Pasta segura para Streamlit Cloud
+FAISS_DIR = "/mount/data/base_faiss"
 
 def processar_documentos():
-
-    # Criar pasta da base caso não exista
-    if not os.path.exists("base_faiss"):
-        os.makedirs("base_faiss")
+    # Criar pasta segura
+    os.makedirs(FAISS_DIR, exist_ok=True)
 
     arquivos = [
         "dados/politica_rh.pdf",
@@ -17,22 +18,24 @@ def processar_documentos():
     ]
 
     docs = []
-    for arquivo in arquivos:
-        loader = PyPDFLoader(arquivo)
+    for a in arquivos:
+        loader = PyPDFLoader(a)
         docs.extend(loader.load())
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
     )
+    chunks = splitter.split_documents(docs)
 
-    textos = splitter.split_documents(docs)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    # Criar FAISS
+    db = FAISS.from_documents(chunks, embeddings)
 
-    FAISS.from_documents(
-        textos,
-        embeddings
-    ).save_local("base_faiss")
+    # Salvar no local permitido
+    db.save_local(FAISS_DIR)
 
-    print("Base FAISS criada com sucesso!")
+    print("FAISS salva em:", FAISS_DIR)
