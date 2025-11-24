@@ -11,6 +11,25 @@ from ingest import processar_documentos
 load_dotenv()
 
 st.title("Assistente Interno da Claro - Protótipo")
+
+# --- EXPLICAÇÃO DA TECNOLOGIA ---
+st.markdown("""
+### 🚀 O que é essa tecnologia?
+
+Criamos um **Assistente Inteligente baseado em RAG (Retrieval-Augmented Generation)** — uma tecnologia que permite que a IA responda de forma precisa usando exclusivamente documentos internos da empresa.
+
+Ela funciona assim:
+
+- 📄 **Lê documentos internos** como PDFs, políticas, manuais e materiais de onboarding.  
+- 🔍 **Transforma o conteúdo em vetores** por meio de embeddings (FAISS).  
+- ❓ Quando uma pergunta é realizada:
+  - O sistema busca automaticamente os trechos mais relevantes nos documentos.
+  - Esses trechos são enviados como contexto para o modelo de IA.
+- 🧠 A IA gera uma resposta clara baseada apenas no conteúdo disponível nos documentos da empresa.
+
+Esse processo garante respostas rápidas, consistentes e alinhadas com as informações institucionais.
+""")
+
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
 # ---- BOTÃO DE INGEST ----
