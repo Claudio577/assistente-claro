@@ -1,20 +1,15 @@
-import shutil
-from langchain_community.document_loaders import PDFPlumberLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
 def processar_documentos():
+    print("📥 Carregando documentos...")
 
-    # 1 — limpar base antiga
-    shutil.rmtree("chroma", ignore_errors=True)
-
-    # 2 — carregar embeddings
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # 3 — PDFs na pasta dados/
     arquivos = [
         "dados/politica_rh.pdf",
         "dados/manual_ti.pdf",
@@ -23,26 +18,26 @@ def processar_documentos():
 
     docs = []
     for arquivo in arquivos:
-        loader = PDFPlumberLoader(arquivo)
+        loader = PyPDFLoader(arquivo)
         docs.extend(loader.load())
 
-    # 4 — dividir em chunks
+    print("✂️ Dividindo documentos em pedaços...")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
+        chunk_size=800,
         chunk_overlap=150
     )
+
     textos = splitter.split_documents(docs)
 
-    # 5 — criar base vetorial persistida
+    print("💾 Salvando vetores no Chroma...")
     Chroma.from_documents(
-        documentos=textos,
-        embedding=embeddings,
-        persist_directory="chroma",
-        collection_name="claro_base"
+        textos,
+        embeddings,
+        collection_name="claro_base",
+        persist_directory="chroma"
     )
 
-    print("📦 Base vetorial gerada com sucesso!")
-
+    print("✅ Base vetorial criada com sucesso!")
 
 if __name__ == "__main__":
     processar_documentos()
