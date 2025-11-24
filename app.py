@@ -31,7 +31,7 @@ if st.button("🔄 Atualizar base vetorial (rodar ingest)"):
 st.write("---")
 
 # ---------------------------------------------------------
-# MODELO OPENAI (PARA RESPOSTAS E REESCRITA)
+# MODELO OPENAI
 # ---------------------------------------------------------
 llm = ChatOpenAI(
     model="gpt-4o-mini",
@@ -46,31 +46,31 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 # ---------------------------------------------------------
-# CHROMA VECTORSTORE
+# CHROMA VECTORSTORE (AGORA COM persist_directory)
 # ---------------------------------------------------------
 db = Chroma(
     collection_name="claro_base",
-    embedding_function=embeddings
+    embedding_function=embeddings,
+    persist_directory="chroma"
 )
 
 # ---------------------------------------------------------
-# FUNÇÃO: REESCRITA DE PERGUNTA (QUERY REWRITING)
+# FUNÇÃO: REESCRITA DE PERGUNTA
 # ---------------------------------------------------------
 def melhorar_pergunta(pergunta):
     prompt = f"""
-    Reescreva a pergunta abaixo de forma objetiva para ser otimizada em sistemas de busca
-    de documentos internos da Claro. Não altere o significado, apenas simplifique:
+    Reescreva a pergunta abaixo de forma objetiva para busca em documentos internos.
+    Não altere o significado, apenas deixe mais direta.
 
     PERGUNTA ORIGINAL:
     {pergunta}
     """
-
     resposta = llm.invoke(prompt)
-    return resposta.content
+    return resposta.content.strip()
 
 
 # ---------------------------------------------------------
-# FUNÇÃO: BUSCA INTELIGENTE COM SCORE
+# FUNÇÃO: BUSCA COM SCORE
 # ---------------------------------------------------------
 def buscar_documentos(pergunta):
     pergunta_reescrita = melhorar_pergunta(pergunta)
@@ -80,14 +80,14 @@ def buscar_documentos(pergunta):
         k=5
     )
 
-    # Filtragem por relevância
-    docs_filtrados = [doc for doc, score in docs_com_scores if score < 0.65]
+    # Score do Chroma: quanto MAIOR, mais relevante
+    docs_filtrados = [doc for doc, score in docs_com_scores if score > 0.3]
 
     return docs_filtrados, pergunta_reescrita
 
 
 # ---------------------------------------------------------
-# INTERFACE: CAMPO DE PERGUNTA
+# INTERFACE
 # ---------------------------------------------------------
 pergunta = st.text_input("Digite sua pergunta:")
 
@@ -104,16 +104,12 @@ if pergunta:
 
         st.stop()
 
-    # Montar contexto com documentos encontrados
     contexto = "\n\n".join([d.page_content for d in docs_list])
 
-    # ---------------------------------------------------------
-    # PROMPT FINAL PARA O MODELO
-    # ---------------------------------------------------------
     prompt_resposta = f"""
-    Você é um assistente interno da Claro. Responda SOMENTE com base nos documentos abaixo.
+    Você é um assistente interno da Claro. Responda SOMENTE com base nos documentos abaixo:
 
-    DOCUMENTOS ENCONTRADOS:
+    DOCUMENTOS:
     {contexto}
 
     PERGUNTA ORIGINAL:
@@ -122,8 +118,7 @@ if pergunta:
     PERGUNTA REESCRITA:
     {pergunta_reescrita}
 
-    Responda de forma objetiva, clara e cite apenas informações que realmente aparecem nos documentos.
-    Se a resposta não estiver nos documentos, diga explicitamente que não consta.
+    Responda de forma objetiva e apenas com informações presentes nos documentos.
     """
 
     resposta = llm.invoke(prompt_resposta)
@@ -132,8 +127,7 @@ if pergunta:
     st.write(resposta.content)
 
     with st.expander("Documentos utilizados"):
-        st.write(f"Pergunta reescrita: **{pergunta_reescrita}**")
-
+        st.write(f"🔁 Pergunta reescrita: **{pergunta_reescrita}**")
         for d in docs_list:
             st.write("-" * 50)
             st.write(d.page_content[:600] + "...")
