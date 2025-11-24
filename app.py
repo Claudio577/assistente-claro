@@ -1,110 +1,139 @@
 import streamlit as st
+import subprocess
+import sys
+from dotenv import load_dotenv
+
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from dotenv import load_dotenv
 
 load_dotenv()
 
+# ---------------------------------------------------------
+# TÍTULO DO APP
+# ---------------------------------------------------------
 st.title("Assistente Interno da Claro - Protótipo")
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
-# ---------------------------
-# MODELO PRINCIPAL (OpenAI)
-# ---------------------------
+# ---------------------------------------------------------
+# BOTÃO: RODAR INGEST.PY E ATUALIZAR A BASE
+# ---------------------------------------------------------
+if st.button("🔄 Atualizar base vetorial (rodar ingest)"):
+    with st.spinner("Processando documentos e reconstruindo os vetores..."):
+        result = subprocess.run(
+            [sys.executable, "ingest.py"],
+            capture_output=True,
+            text=True
+        )
+        st.success("Base vetorial atualizada com sucesso!")
+        st.code(result.stdout)
+
+st.write("---")
+
+# ---------------------------------------------------------
+# MODELO OPENAI (PARA RESPOSTAS E REESCRITA)
+# ---------------------------------------------------------
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
 
-# ---------------------------
+# ---------------------------------------------------------
 # EMBEDDINGS LOCAIS
-# ---------------------------
+# ---------------------------------------------------------
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-# ---------------------------
-# VETORSTORE DO CHROMA
-# ---------------------------
-db = Chroma(collection_name="claro_base", embedding_function=embeddings)
+# ---------------------------------------------------------
+# CHROMA VECTORSTORE
+# ---------------------------------------------------------
+db = Chroma(
+    collection_name="claro_base",
+    embedding_function=embeddings
+)
 
-# ---------------------------
-# REESCRITA DE PERGUNTA (Query Rewriting)
-# ---------------------------
+# ---------------------------------------------------------
+# FUNÇÃO: REESCRITA DE PERGUNTA (QUERY REWRITING)
+# ---------------------------------------------------------
 def melhorar_pergunta(pergunta):
     prompt = f"""
-    Reescreva a pergunta abaixo de forma objetiva e otimizada para busca em documentos internos da Claro.
-    Não mude o significado, apenas simplifique:
+    Reescreva a pergunta abaixo de forma objetiva para ser otimizada em sistemas de busca
+    de documentos internos da Claro. Não altere o significado, apenas simplifique:
 
-    Pergunta: {pergunta}
+    PERGUNTA ORIGINAL:
+    {pergunta}
     """
-    return llm.invoke(prompt).content
 
-# ---------------------------
-# BUSCA INTELIGENTE
-# ---------------------------
+    resposta = llm.invoke(prompt)
+    return resposta.content
+
+
+# ---------------------------------------------------------
+# FUNÇÃO: BUSCA INTELIGENTE COM SCORE
+# ---------------------------------------------------------
 def buscar_documentos(pergunta):
-    # 1) Reescrever pergunta para melhorar a busca
-    pergunta_melhorada = melhorar_pergunta(pergunta)
+    pergunta_reescrita = melhorar_pergunta(pergunta)
 
-    # 2) Buscar documentos com pontuação
-    docs_scores = db.similarity_search_with_score(pergunta_melhorada, k=5)
+    docs_com_scores = db.similarity_search_with_score(
+        pergunta_reescrita,
+        k=5
+    )
 
-    # 3) Filtrar pela relevância
-    docs_filtrados = [doc for doc, score in docs_scores if score < 0.65]
+    # Filtragem por relevância
+    docs_filtrados = [doc for doc, score in docs_com_scores if score < 0.65]
 
-    return docs_filtrados, pergunta_melhorada
+    return docs_filtrados, pergunta_reescrita
 
 
+# ---------------------------------------------------------
+# INTERFACE: CAMPO DE PERGUNTA
+# ---------------------------------------------------------
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
+
     docs_list, pergunta_reescrita = buscar_documentos(pergunta)
 
-    # Se nada relevante foi encontrado
     if len(docs_list) == 0:
         st.write("### Resposta")
-        st.write("Não encontrei essa informação nos documentos internos. Tente reformular a pergunta.")
+        st.write("❌ Não encontrei essa informação nos documentos internos.")
 
         with st.expander("Pergunta reformulada automaticamente"):
             st.write(pergunta_reescrita)
 
         st.stop()
 
-    # Montar contexto
+    # Montar contexto com documentos encontrados
     contexto = "\n\n".join([d.page_content for d in docs_list])
 
-    # ---------------------------
-    # PROMPT FINAL PARA RESPOSTA
-    # ---------------------------
-    prompt_final = f"""
-    Você é um assistente interno da Claro. Responda com base SOMENTE nos documentos abaixo:
+    # ---------------------------------------------------------
+    # PROMPT FINAL PARA O MODELO
+    # ---------------------------------------------------------
+    prompt_resposta = f"""
+    Você é um assistente interno da Claro. Responda SOMENTE com base nos documentos abaixo.
 
-    DOCUMENTOS:
+    DOCUMENTOS ENCONTRADOS:
     {contexto}
 
-    PERGUNTA DO USUÁRIO:
+    PERGUNTA ORIGINAL:
     {pergunta}
 
-    PERGUNTA REESCRITA (para contexto):
+    PERGUNTA REESCRITA:
     {pergunta_reescrita}
 
-    Responda de forma clara, objetiva e correta, citando somente o que realmente aparece nos documentos.
-    Se a informação não estiver nos documentos, diga que não consta.
+    Responda de forma objetiva, clara e cite apenas informações que realmente aparecem nos documentos.
+    Se a resposta não estiver nos documentos, diga explicitamente que não consta.
     """
 
-    resposta = llm.invoke(prompt_final).content
+    resposta = llm.invoke(prompt_resposta)
 
-    # ---------------------------
-    # EXIBIR RESULTADO
-    # ---------------------------
     st.write("### Resposta")
-    st.write(resposta)
+    st.write(resposta.content)
 
     with st.expander("Documentos utilizados"):
-        st.write(f"Pergunta reescrita: **{pergunta_reescrita}**\n")
+        st.write(f"Pergunta reescrita: **{pergunta_reescrita}**")
+
         for d in docs_list:
             st.write("-" * 50)
             st.write(d.page_content[:600] + "...")
-
