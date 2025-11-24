@@ -10,13 +10,13 @@ load_dotenv()
 st.title("Assistente Interno da Claro - Protótipo")
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
-# ---- Modelo de linguagem (somente para resposta) ----
+# ---- Modelo de linguagem ----
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
 
-# ---- Embeddings locais (sem OpenAI, sem limite) ----
+# ---- Embeddings locais ----
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -27,17 +27,23 @@ db = Chroma(
     embedding_function=embeddings
 )
 
-# ---- Entrada do usuário ----
+# ---- Entrada ----
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
-    # 1. Busca de documentos relevantes (compatível com todas versões)
-    docs_list = db.similarity_search(pergunta, k=3)
 
-    # 2. Criar contexto a partir dos documentos
+    # EXPANDE a consulta para melhorar a busca semântica
+    consulta_expandida = (
+        f"{pergunta} beneficios vantagens direitos processo politica RH TI onboarding Claro"
+    )
+
+    # Busca documentos relevantes (mais tolerante)
+    docs_list = db.similarity_search(consulta_expandida, k=5)
+
+    # Monta contexto
     contexto = "\n\n".join([d.page_content for d in docs_list])
 
-    # 3. Prompt anti-alucinação
+    # Prompt anti-alucinação
     prompt = f"""
 Você é um assistente interno da Claro.
 Responda APENAS com base no CONTEXTO abaixo.
@@ -55,17 +61,16 @@ PERGUNTA:
 {pergunta}
 
 Responda de forma clara e objetiva.
-"""
+    """
 
-    # 4. Geração da resposta usando o LLM
+    # Gera resposta
     resposta = llm.invoke(prompt)
 
     # ---- Saída ----
     st.write("### Resposta")
     st.write(resposta.content)
 
-    # ---- Mostrar documentos usados ----
+    # Documentos usados
     with st.expander("Documentos utilizados"):
         for d in docs_list:
             st.write(d.page_content[:500] + "...")
-
