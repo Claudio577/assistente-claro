@@ -48,7 +48,9 @@ embeddings = HuggingFaceEmbeddings(
 db = Chroma(
     collection_name="claro_base",
     embedding_function=embeddings,
-    persist_directory="chroma"
+    persist_directory="chroma"      # <<< LENDO A PASTA CORRETA
+)
+
 )
 
 # ---------------------------------------------------------
