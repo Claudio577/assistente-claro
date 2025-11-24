@@ -8,35 +8,35 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from ingest import processar_documentos
 
+FAISS_DIR = "/mount/data/base_faiss"
+
 load_dotenv()
 
 st.title("Assistente Interno da Claro - Protótipo")
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
-# ---- BOTÃO DE INGEST ----
+# -------- BOTÃO DE RECRIAÇÃO DA BASE --------
 if st.button("🔄 Atualizar base vetorial (rodar ingest)"):
-    with st.spinner("Processando documentos e criando base vetorial..."):
+    with st.spinner("Processando documentos e criando vetores..."):
         processar_documentos()
     st.success("Base vetorial criada com sucesso!")
 
-# ---- VERIFICAR SE A BASE EXISTE ----
-if not os.path.exists("base_faiss"):
-    st.warning("⏳ Base vetorial não encontrada. Clique no botão acima para rodar o ingest.")
+# -------- VERIFICAR A BASE --------
+if not os.path.exists(FAISS_DIR):
+    st.warning("⚠ A base vetorial ainda não foi criada. Clique acima para rodar o ingest.")
     st.stop()
 
-# ---- CARREGAR A BASE ----
+# -------- CARREGAR BASE --------
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+db = FAISS.load_local(FAISS_DIR, embeddings, allow_dangerous_deserialization=True)
 
-db = FAISS.load_local("base_faiss", embeddings, allow_dangerous_deserialization=True)
-
-# ---- OPENAI ----
+# -------- MODELO --------
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-# ---- CAMPO DE PERGUNTA ----
+# -------- CAIXA DE PERGUNTA --------
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
-
     resultados = db.similarity_search(pergunta, k=5)
 
     if len(resultados) == 0:
@@ -52,13 +52,14 @@ if pergunta:
 
     Pergunta: {pergunta}
 
-    Se não houver resposta nos documentos, diga que não consta.
+    Se a resposta não estiver nos documentos, diga: 'não consta'.
     """
 
     resposta = llm.invoke(prompt)
-    st.write("### Resposta")
+
+    st.write("### Resposta:")
     st.write(resposta.content)
 
     with st.expander("Documentos utilizados"):
         for doc in resultados:
-            st.write(doc.page_content[:500] + "...")
+            st.write(doc.page_content[:300] + "...")
