@@ -1,9 +1,7 @@
-streamlit
+langchain==0.1.16
+langchain-community==0.0.29
+langchain-text-splitters==0.0.1
+faiss-cpu==1.7.4
 python-dotenv
-langchain
-langchain-core
-langchain-community
-langchain-openai
-faiss-cpu
-sentence-transformers
 pypdf
+streamlit
