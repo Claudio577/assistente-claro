@@ -1,9 +1,9 @@
 streamlit
 python-dotenv
 langchain
-langchain-community
 langchain-openai
+langchain-community
+pypdf
+pdfplumber
 chromadb
 sentence-transformers
-langchain-text-splitters
-pytesseract
