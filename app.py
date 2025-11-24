@@ -6,7 +6,6 @@ from langchain_openai import ChatOpenAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
-from ingest import processar_documentos  # usamos o ingest DIRETAMENTE
 
 load_dotenv()
 
