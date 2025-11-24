@@ -6,3 +6,4 @@ langchain-openai
 chromadb
 sentence-transformers
 langchain-text-splitters
+pytesseract
