@@ -1,12 +1,10 @@
 import streamlit as st
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
-from langchain.chains import RetrievalQA
+from langchain.chains.retrieval import RetrievalQA
 from dotenv import load_dotenv
 import os
 
-# Carregar variáveis de ambiente
 load_dotenv()
 
 st.title("Assistente Interno da Claro - Protótipo")
@@ -18,15 +16,15 @@ llm = ChatOpenAI(
     temperature=0
 )
 
-# Carregar a base vetorial
+# Carregar base vetorial
 embeddings = OpenAIEmbeddings()
 db = Chroma(collection_name="claro_base", embedding_function=embeddings)
 
 # Criar cadeia RAG
 qa_chain = RetrievalQA.from_chain_type(
     llm=llm,
-    chain_type="stuff",
-    retriever=db.as_retriever()
+    retriever=db.as_retriever(),
+    chain_type="stuff"
 )
 
 # Interface
