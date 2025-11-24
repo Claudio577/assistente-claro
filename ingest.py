@@ -1,28 +1,39 @@
-# ingest.py
-from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 
 def processar_documentos():
     embeddings = OpenAIEmbeddings()
 
-    # Carrega documentos
+    # Lista de PDFs
+    arquivos = [
+        "dados/politica_rh.pdf",
+        "dados/manual_ti.pdf",
+        "dados/onboarding.pdf"
+    ]
+
     docs = []
-    for arquivo in ["dados/politicas_rh.pdf", "dados/manual_ti.pdf"]:
+    for arquivo in arquivos:
         loader = PyPDFLoader(arquivo)
         docs.extend(loader.load())
 
-    # Divide em pedaços menores
+    # Quebra dos textos
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
     )
     textos = splitter.split_documents(docs)
 
-    # Cria vetor store
-    db = Chroma.from_documents(textos, embeddings, collection_name="claro_base")
-    print("Documentos indexados com sucesso!")
+    # Criação da base vetorial
+    db = Chroma.from_documents(
+        textos,
+        embeddings,
+        collection_name="claro_base"
+    )
+
+    print("📦 Documentos indexados com sucesso!")
 
 if __name__ == "__main__":
     processar_documentos()
+
