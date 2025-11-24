@@ -3,7 +3,12 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+import tempfile
 
+FAISS_DIR = os.path.join(tempfile.gettempdir(), "base_faiss")
+
+# cria a pasta se não existir
+os.makedirs(FAISS_DIR, exist_ok=True)
 # Pasta segura para Streamlit Cloud
 FAISS_DIR = "/mount/data/base_faiss"
 
@@ -36,6 +41,6 @@ def processar_documentos():
     db = FAISS.from_documents(chunks, embeddings)
 
     # Salvar no local permitido
-    db.save_local(FAISS_DIR)
+   db.save_local(FAISS_DIR)
 
     print("FAISS salva em:", FAISS_DIR)
