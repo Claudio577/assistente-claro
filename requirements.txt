@@ -6,3 +6,4 @@ openai
 pypdf
 streamlit
 python-dotenv
+sentence-transformers
