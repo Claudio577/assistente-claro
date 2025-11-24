@@ -7,6 +7,15 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from ingest import processar_documentos
+import tempfile
+
+FAISS_DIR = os.path.join(tempfile.gettempdir(), "base_faiss")
+
+db = FAISS.load_local(
+    FAISS_DIR,
+    embeddings,
+    allow_dangerous_deserialization=True
+)
 
 FAISS_DIR = "/mount/data/base_faiss"
 
