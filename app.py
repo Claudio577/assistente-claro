@@ -20,25 +20,42 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
+# Base vetorial
 db = Chroma(collection_name="claro_base", embedding_function=embeddings)
 
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
-    docs_list = db.similarity_search(pergunta, k=3)
 
+    # 🔎 ***Busca expandida (melhora MUITO a precisão)***
+    consulta_expandida = (
+        f"{pergunta} beneficios colaborador RH regras processos politica onboarding TI Claro"
+    )
+
+    docs_list = db.similarity_search(consulta_expandida, k=5)
+
+    # Cria contexto
     contexto = "\n\n".join([d.page_content for d in docs_list])
 
+    # Prompt anti-alucinação e claro
     prompt = f"""
-    Você é um assistente interno da Claro. Responda SOMENTE com base no contexto abaixo:
+Você é um assistente interno da Claro.
+Responda APENAS com base no CONTEXTO abaixo.
+Se a informação não estiver no contexto, diga exatamente:
 
-    CONTEXTO:
-    {contexto}
+"Não encontrei essa informação nos documentos internos."
 
-    PERGUNTA:
-    {pergunta}
+Não invente nada. Não use conhecimento externo.
 
-    Responda de modo claro, direto e correto.
+-------------------------
+CONTEXTO:
+{contexto}
+-------------------------
+
+PERGUNTA:
+{pergunta}
+
+Responda de forma clara, objetiva e profissional.
     """
 
     resposta = llm.invoke(prompt)
