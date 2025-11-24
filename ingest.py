@@ -4,8 +4,6 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
 def processar_documentos():
-    print("📥 Carregando documentos...")
-
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -21,23 +19,22 @@ def processar_documentos():
         loader = PyPDFLoader(arquivo)
         docs.extend(loader.load())
 
-    print("✂️ Dividindo documentos em pedaços...")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=150
+        chunk_size=1000,
+        chunk_overlap=200
     )
 
     textos = splitter.split_documents(docs)
 
-    print("💾 Salvando vetores no Chroma...")
     Chroma.from_documents(
         textos,
         embeddings,
         collection_name="claro_base",
-        persist_directory="chroma"
-    )
+        persist_directory="chroma"       # <<< OBRIGATÓRIO!
+    ).persist()
 
-    print("✅ Base vetorial criada com sucesso!")
+    print("📦 Base vetorial atualizada com sucesso!")
 
 if __name__ == "__main__":
     processar_documentos()
+
