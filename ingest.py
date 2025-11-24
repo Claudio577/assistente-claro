@@ -1,15 +1,14 @@
-import os
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-
+from langchain_community.vectorstores import FAISS
+import os
 
 def processar_documentos():
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
+    # Criar pasta da base caso não exista
+    if not os.path.exists("base_faiss"):
+        os.makedirs("base_faiss")
 
     arquivos = [
         "dados/politica_rh.pdf",
@@ -26,11 +25,14 @@ def processar_documentos():
         chunk_size=1000,
         chunk_overlap=200
     )
+
     textos = splitter.split_documents(docs)
 
-    # ---- FAISS ----
-    db = FAISS.from_documents(textos, embeddings)
-    db.save_local("base_faiss")
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    print("Base vetorial criada com sucesso!")
+    FAISS.from_documents(
+        textos,
+        embeddings
+    ).save_local("base_faiss")
 
+    print("Base FAISS criada com sucesso!")
