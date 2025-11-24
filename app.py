@@ -6,71 +6,46 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---- Layout ----
 st.title("Assistente Interno da Claro - Protótipo")
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
-# ---- Modelo de linguagem ----
+# Modelo da OpenAI (somente para responder)
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
 
-# ---- Embeddings locais ----
+# Embeddings locais (sem limite, sem erro)
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-# ---- Banco vetorial ----
-db = Chroma(
-    collection_name="claro_base",
-    embedding_function=embeddings
-)
+db = Chroma(collection_name="claro_base", embedding_function=embeddings)
 
-# ---- Entrada ----
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
+    docs_list = db.similarity_search(pergunta, k=3)
 
-    # EXPANDE a consulta para melhorar a busca semântica
-    consulta_expandida = (
-        f"{pergunta} beneficios vantagens direitos processo politica RH TI onboarding Claro"
-    )
-
-    # Busca documentos relevantes (mais tolerante)
-    docs_list = db.similarity_search(consulta_expandida, k=5)
-
-    # Monta contexto
     contexto = "\n\n".join([d.page_content for d in docs_list])
 
-    # Prompt anti-alucinação
     prompt = f"""
-Você é um assistente interno da Claro.
-Responda APENAS com base no CONTEXTO abaixo.
-Se a resposta não estiver no contexto, diga exatamente:
-"Não encontrei essa informação nos documentos internos."
+    Você é um assistente interno da Claro. Responda SOMENTE com base no contexto abaixo:
 
-NÃO invente nada. NÃO use conhecimento externo.
+    CONTEXTO:
+    {contexto}
 
------------------------
-CONTEXTO:
-{contexto}
------------------------
+    PERGUNTA:
+    {pergunta}
 
-PERGUNTA:
-{pergunta}
-
-Responda de forma clara e objetiva.
+    Responda de modo claro, direto e correto.
     """
 
-    # Gera resposta
     resposta = llm.invoke(prompt)
 
-    # ---- Saída ----
     st.write("### Resposta")
     st.write(resposta.content)
 
-    # Documentos usados
     with st.expander("Documentos utilizados"):
         for d in docs_list:
-            st.write(d.page_content[:500] + "...")
+            st.write(d.page_content[:400] + "...")
