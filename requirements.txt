@@ -1,9 +1,8 @@
+streamlit
+python-dotenv
 langchain
 langchain-community
 langchain-openai
 chromadb
-openai
-pypdf
-streamlit
-python-dotenv
 sentence-transformers
+langchain-text-splitters
