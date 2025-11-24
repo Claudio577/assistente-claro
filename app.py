@@ -1,83 +1,99 @@
 import streamlit as st
-import subprocess
-import sys
+import os
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
+from ingest import processar_documentos  # usamos o ingest DIRETAMENTE
+
 load_dotenv()
 
 st.title("Assistente Interno da Claro - Protótipo")
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
-# Botão de ingest
-if st.button("🔄 Atualizar base vetorial (rodar ingest)"):
-    with st.spinner("Processando documentos e reconstruindo os vetores..."):
-        result = subprocess.run(
-            [sys.executable, "ingest.py"],
-            capture_output=True,
-            text=True
-        )
-        st.success("Base vetorial atualizada com sucesso!")
-        st.code(result.stdout)
+# ---------------------------------------------------------
+# CONFIGURAÇÕES
+# ---------------------------------------------------------
+INDEX_PATH = "faiss_index"
 
-st.write("---")
+# ---------------------------------------------------------
+# INICIALIZAÇÃO AUTOMÁTICA DA BASE VETORIAL
+# ---------------------------------------------------------
+@st.cache_resource
+def carregar_base():
+    """Carrega FAISS ou cria automaticamente se não existir."""
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-# Modelo para resposta
+    if not os.path.exists(INDEX_PATH):
+        st.warning("⏳ Base vetorial não encontrada. Criando agora...")
+        processar_documentos()
+        st.success("✔ Base vetorial criada com sucesso!")
+
+    # Carrega FAISS do disco
+    return FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+
+# Carrega ou cria automaticamente
+db = carregar_base()
+
+# ---------------------------------------------------------
+# MODELO DE LINGUAGEM
+# ---------------------------------------------------------
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
 
-# Embeddings
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
-
-# Carregar FAISS
-try:
-    db = FAISS.load_local("faiss_store", embeddings, allow_dangerous_deserialization=True)
-except:
-    db = None
-
+# ---------------------------------------------------------
+# FUNÇÃO DE MELHORAR PERGUNTA
+# ---------------------------------------------------------
 def melhorar_pergunta(pergunta):
     prompt = f"""
-    Reescreva esta pergunta de forma objetiva para busca em documentos internos:
+    Reescreva a pergunta abaixo de forma mais direta e objetiva,
+    pensando em otimizar a busca nos documentos internos da Claro.
 
-    PERGUNTA:
+    PERGUNTA ORIGINAL:
     {pergunta}
     """
+    resposta = llm.invoke(prompt)
+    return resposta.content
 
-    return llm.invoke(prompt).content
+# ---------------------------------------------------------
+# BUSCA VETORIAL
+# ---------------------------------------------------------
+def buscar(pergunta):
+    pergunta_reescrita = melhorar_pergunta(pergunta)
 
+    docs = db.similarity_search(
+        pergunta_reescrita,
+        k=5
+    )
 
+    return docs, pergunta_reescrita
+
+# ---------------------------------------------------------
+# INTERFACE
+# ---------------------------------------------------------
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
-    if db is None:
-        st.error("❌ A base vetorial ainda não foi criada. Clique no botão acima para rodar o ingest.")
-        st.stop()
-
-    pergunta_reescrita = melhorar_pergunta(pergunta)
-    docs = db.similarity_search(pergunta_reescrita, k=5)
+    docs, pergunta_reescrita = buscar(pergunta)
 
     if len(docs) == 0:
-        st.write("### Resposta")
         st.error("❌ Não encontrei essa informação nos documentos internos.")
-
-        with st.expander("Pergunta reformulada automaticamente"):
+        with st.expander("Pergunta reformulada automaticamente:"):
             st.write(pergunta_reescrita)
-
         st.stop()
 
-    contexto = "\n\n".join([d.page_content for d in docs])
+    contexto = "\n\n".join(d.page_content for d in docs)
 
     prompt = f"""
-    Você é um assistente interno da Claro. Responda SOMENTE com base nos documentos abaixo.
+    Você é um assistente interno da Claro. Responda SOMENTE com base no conteúdo abaixo.
 
-    DOCUMENTOS ENCONTRADOS:
+    DOCUMENTOS:
     {contexto}
 
     PERGUNTA ORIGINAL:
@@ -86,7 +102,7 @@ if pergunta:
     PERGUNTA REESCRITA:
     {pergunta_reescrita}
 
-    Responda somente com informações explícitas nos documentos.
+    Se a resposta não estiver nos documentos, diga claramente: "Isso não consta nos documentos."
     """
 
     resposta = llm.invoke(prompt)
@@ -97,5 +113,5 @@ if pergunta:
     with st.expander("Documentos utilizados"):
         st.write(f"Pergunta reescrita: **{pergunta_reescrita}**")
         for d in docs:
-            st.write("-" * 50)
-            st.write(d.page_content[:500] + " ...")
+            st.write("-" * 40)
+            st.write(d.page_content[:500] + "...")
