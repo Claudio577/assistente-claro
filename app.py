@@ -2,104 +2,109 @@ import streamlit as st
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
 st.title("Assistente Interno da Claro - Protótipo")
 st.write("Pergunte sobre RH, TI ou documentos internos.")
 
-# Modelo
+# ---------------------------
+# MODELO PRINCIPAL (OpenAI)
+# ---------------------------
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
 
-# Embeddings locais
+# ---------------------------
+# EMBEDDINGS LOCAIS
+# ---------------------------
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-# 🔵 FUNÇÃO PARA RECRIAR A BASE VETORIAL DIRETO NO STREAMLIT
-def atualizar_base():
-    st.write("🔄 Atualizando base vetorial...")
-
-    arquivos = [
-        "dados/politica_rh.pdf",
-        "dados/manual_ti.pdf",
-        "dados/onboarding.pdf"
-    ]
-
-    docs = []
-    for arquivo in arquivos:
-        if os.path.exists(arquivo):
-            loader = PyPDFLoader(arquivo)
-            docs.extend(loader.load())
-        else:
-            st.error(f"Arquivo não encontrado: {arquivo}")
-            return
-    
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
-
-    textos = splitter.split_documents(docs)
-
-    # Recria a base do zero
-    Chroma.from_documents(
-        textos,
-        embeddings,
-        collection_name="claro_base"
-    )
-
-    st.success("✅ Base vetorial atualizada com sucesso!")
-
-# 🔵 BOTÃO PARA ATUALIZAR A BASE
-if st.button("🔄 Atualizar base vetorial (rodar ingest)"):
-    atualizar_base()
-
-# Carrega a base existente (ou a nova após recriação)
+# ---------------------------
+# VETORSTORE DO CHROMA
+# ---------------------------
 db = Chroma(collection_name="claro_base", embedding_function=embeddings)
+
+# ---------------------------
+# REESCRITA DE PERGUNTA (Query Rewriting)
+# ---------------------------
+def melhorar_pergunta(pergunta):
+    prompt = f"""
+    Reescreva a pergunta abaixo de forma objetiva e otimizada para busca em documentos internos da Claro.
+    Não mude o significado, apenas simplifique:
+
+    Pergunta: {pergunta}
+    """
+    return llm.invoke(prompt).content
+
+# ---------------------------
+# BUSCA INTELIGENTE
+# ---------------------------
+def buscar_documentos(pergunta):
+    # 1) Reescrever pergunta para melhorar a busca
+    pergunta_melhorada = melhorar_pergunta(pergunta)
+
+    # 2) Buscar documentos com pontuação
+    docs_scores = db.similarity_search_with_score(pergunta_melhorada, k=5)
+
+    # 3) Filtrar pela relevância
+    docs_filtrados = [doc for doc, score in docs_scores if score < 0.65]
+
+    return docs_filtrados, pergunta_melhorada
+
 
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:
-    consulta_expandida = (
-        f"{pergunta} jornada horas semana carga horaria expediente beneficios RH TI Claro"
-    )
+    docs_list, pergunta_reescrita = buscar_documentos(pergunta)
 
-    docs_list = db.similarity_search(consulta_expandida, k=5)
+    # Se nada relevante foi encontrado
+    if len(docs_list) == 0:
+        st.write("### Resposta")
+        st.write("Não encontrei essa informação nos documentos internos. Tente reformular a pergunta.")
 
+        with st.expander("Pergunta reformulada automaticamente"):
+            st.write(pergunta_reescrita)
+
+        st.stop()
+
+    # Montar contexto
     contexto = "\n\n".join([d.page_content for d in docs_list])
 
-    prompt = f"""
-Você é um assistente interno da Claro.
-Responda APENAS com base no CONTEXTO abaixo.
+    # ---------------------------
+    # PROMPT FINAL PARA RESPOSTA
+    # ---------------------------
+    prompt_final = f"""
+    Você é um assistente interno da Claro. Responda com base SOMENTE nos documentos abaixo:
 
-Se a informação não estiver no contexto, diga:
-"Não encontrei essa informação nos documentos internos."
+    DOCUMENTOS:
+    {contexto}
 
------------------------
-CONTEXTO:
-{contexto}
------------------------
+    PERGUNTA DO USUÁRIO:
+    {pergunta}
 
-PERGUNTA:
-{pergunta}
+    PERGUNTA REESCRITA (para contexto):
+    {pergunta_reescrita}
 
-Responda de forma clara e objetiva.
-"""
+    Responda de forma clara, objetiva e correta, citando somente o que realmente aparece nos documentos.
+    Se a informação não estiver nos documentos, diga que não consta.
+    """
 
-    resposta = llm.invoke(prompt)
+    resposta = llm.invoke(prompt_final).content
 
+    # ---------------------------
+    # EXIBIR RESULTADO
+    # ---------------------------
     st.write("### Resposta")
-    st.write(resposta.content)
+    st.write(resposta)
 
     with st.expander("Documentos utilizados"):
+        st.write(f"Pergunta reescrita: **{pergunta_reescrita}**\n")
         for d in docs_list:
-            st.write(d.page_content[:400] + "...")
+            st.write("-" * 50)
+            st.write(d.page_content[:600] + "...")
 
